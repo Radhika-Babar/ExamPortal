@@ -18,12 +18,21 @@
  *   5. One session per student per exam (enforced by DB unique index + code check)
  */
 
-const Exam           = require('../models/exam.model');
-const ExamSession    = require('../models/examSession.model');
-const { shuffleArray }     = require('../utils/shuffle');
-const { getRemainingSeconds, hasExpired } = require('../services/timer.service');
-const { calculateScore }                 = require('../services/grading.service');
-const { success, created, notFound, badRequest, forbidden } = require('../utils/apiResponse');
+const Exam = require("../models/exam.model");
+const ExamSession = require("../models/examSession.model");
+const { shuffleArray } = require("../utils/shuffle");
+const {
+  getRemainingSeconds,
+  hasExpired,
+} = require("../services/timer.service");
+const { calculateScore } = require("../services/grading.service");
+const {
+  success,
+  created,
+  notFound,
+  badRequest,
+  forbidden,
+} = require("../utils/apiResponse");
 
 // ─────────────────────────────────────────────
 // POST /api/sessions/start/:examId
@@ -45,49 +54,76 @@ const { success, created, notFound, badRequest, forbidden } = require('../utils/
  *   before deciding to INSERT vs UPDATE. Pre-created = always UPDATE.
  */
 const startSession = async (req, res) => {
-  const { examId }  = req.params;
-  const studentId   = req.user.id;
+  const { examId } = req.params;
+  const studentId = req.user.id;
 
   // ── 1. Fetch and validate the exam ──
   const exam = await Exam.findById(examId);
 
-  if (!exam)              return notFound(res, 'Exam not found');
-  if (!exam.isPublished)  return notFound(res, 'Exam not found');  // don't reveal draft existence
+  if (!exam) return notFound(res, "Exam not found");
+  if (!exam.isPublished) return notFound(res, "Exam not found"); // don't reveal draft existence
 
   const now = new Date();
   if (now < new Date(exam.startTime)) {
-    const minutesUntilStart = Math.ceil((new Date(exam.startTime) - now) / 60000);
-    return badRequest(res, `Exam hasn't started yet. Starts in ${minutesUntilStart} minutes.`);
+    const minutesUntilStart = Math.ceil(
+      (new Date(exam.startTime) - now) / 60000,
+    );
+    return badRequest(
+      res,
+      `Exam hasn't started yet. Starts in ${minutesUntilStart} minutes.`,
+    );
   }
   if (now > new Date(exam.endTime)) {
-    return badRequest(res, 'This exam has ended and is no longer accepting attempts.');
+    return badRequest(
+      res,
+      "This exam has ended and is no longer accepting attempts.",
+    );
   }
 
   // ── 2. Check for existing session (resume scenario) ──
-  const existingSession = await ExamSession.findOne({ student: studentId, exam: examId });
+  const existingSession = await ExamSession.findOne({
+    student: studentId,
+    exam: examId,
+  });
 
   if (existingSession) {
-    if (existingSession.status !== 'in_progress') {
-      return badRequest(res, 'You have already submitted this exam. Check your results.');
+    if (existingSession.status !== "in_progress") {
+      return badRequest(
+        res,
+        "You have already submitted this exam. Check your results.",
+      );
     }
 
     // Check if time expired since they last left
     if (hasExpired(existingSession.startedAt, exam.durationMinutes)) {
-      await finalizeSession(existingSession._id, exam._id, 'auto_submitted');
-      return badRequest(res, 'Your exam time expired while you were away. It has been auto-submitted.');
+      await finalizeSession(existingSession._id, exam._id, "auto_submitted");
+      return badRequest(
+        res,
+        "Your exam time expired while you were away. It has been auto-submitted.",
+      );
     }
 
     // Resume: return existing session with current state
     // Strip correct answers before sending (same rule as fresh start)
-    const safeQuestions = getQuestionsInOrder(exam.questions, existingSession.questionOrder);
+    const safeQuestions = getQuestionsInOrder(
+      exam.questions,
+      existingSession.questionOrder,
+    );
 
-    return success(res, {
-      session:          existingSession,
-      questions:        safeQuestions,
-      responses:        existingSession.responses,
-      remainingSeconds: getRemainingSeconds(existingSession.startedAt, exam.durationMinutes),
-      isResume:         true,
-    }, 'Session resumed');
+    return success(
+      res,
+      {
+        session: existingSession,
+        questions: safeQuestions,
+        responses: existingSession.responses,
+        remainingSeconds: getRemainingSeconds(
+          existingSession.startedAt,
+          exam.durationMinutes,
+        ),
+        isResume: true,
+      },
+      "Session resumed",
+    );
   }
 
   // ── 3. Fresh start: shuffle questions ──
@@ -99,39 +135,46 @@ const startSession = async (req, res) => {
   }
 
   // Store only the IDs in order — the actual question data lives in the Exam doc
-  const questionOrder = orderedQuestions.map(q => q._id);
+  const questionOrder = orderedQuestions.map((q) => q._id);
 
   // ── 4. Pre-create empty response slots ──
   // One slot per question, all with selectedOption: null (unanswered)
-  const emptyResponses = orderedQuestions.map(q => ({
-    questionId:      q._id,
-    selectedOption:  null,
-    isCorrect:       null,
-    isMarkedReview:  false,
-    timeSpentSecs:   0,
-    answeredAt:      null,
+  const emptyResponses = orderedQuestions.map((q) => ({
+    questionId: q._id,
+    selectedOption: null,
+    isCorrect: null,
+    isMarkedReview: false,
+    timeSpentSecs: 0,
+    answeredAt: null,
   }));
 
   // ── 5. Create the session document ──
   const session = await ExamSession.create({
-    student:       studentId,
-    exam:          examId,
+    student: studentId,
+    exam: examId,
     questionOrder: questionOrder,
-    responses:     emptyResponses,
-    status:        'in_progress',
+    responses: emptyResponses,
+    status: "in_progress",
     // startedAt defaults to now() via the model default
   });
 
   // ── 6. Build safe questions (NO correctOption, NO explanation) ──
   const safeQuestions = getQuestionsInOrder(exam.questions, questionOrder);
 
-  return created(res, {
-    session,
-    questions:        safeQuestions,
-    responses:        session.responses,
-    remainingSeconds: getRemainingSeconds(session.startedAt, exam.durationMinutes),
-    isResume:         false,
-  }, 'Exam started. Good luck!');
+  return created(
+    res,
+    {
+      session,
+      questions: safeQuestions,
+      responses: session.responses,
+      remainingSeconds: getRemainingSeconds(
+        session.startedAt,
+        exam.durationMinutes,
+      ),
+      isResume: false,
+    },
+    "Exam started. Good luck!",
+  );
 };
 
 // ─────────────────────────────────────────────
@@ -156,24 +199,29 @@ const startSession = async (req, res) => {
  *   the query condition 'responses.questionId: questionId'".
  */
 const saveAnswer = async (req, res) => {
-  const { sessionId }                                   = req.params;
-  const { questionId, selectedOption, isMarkedReview, timeSpentSecs } = req.body;
+  const { sessionId } = req.params;
+  const { questionId, selectedOption, isMarkedReview, timeSpentSecs } =
+    req.body;
 
   // ── 1. Fetch session with exam duration (needed for timer check) ──
   // We populate exam but only fetch durationMinutes — no need for questions here
   const session = await ExamSession.findOne({
-    _id:     sessionId,
-    student: req.user.id,   // ownership check — this is critical
-  }).populate('exam', 'durationMinutes');
+    _id: sessionId,
+    student: req.user.id, // ownership check — this is critical
+  }).populate("exam", "durationMinutes");
 
-  if (!session)                          return forbidden(res, 'Session not found or access denied');
-  if (session.status !== 'in_progress') return badRequest(res, 'This exam has already been submitted');
+  if (!session) return forbidden(res, "Session not found or access denied");
+  if (session.status !== "in_progress")
+    return badRequest(res, "This exam has already been submitted");
 
   // ── 2. Server-side timer check ──
   if (hasExpired(session.startedAt, session.exam.durationMinutes)) {
     // Auto-submit — don't let them save any more answers
-    await finalizeSession(session._id, session.exam._id, 'auto_submitted');
-    return badRequest(res, 'Time is up! Your exam has been automatically submitted.');
+    await finalizeSession(session._id, session.exam._id, "auto_submitted");
+    return badRequest(
+      res,
+      "Time is up! Your exam has been automatically submitted.",
+    );
   }
 
   // ── 3. Update the specific response in the embedded array ──
@@ -182,27 +230,31 @@ const saveAnswer = async (req, res) => {
   // The update part: $set with $ positional operator updates JUST that response
   await ExamSession.updateOne(
     {
-      _id:                    session._id,
-      'responses.questionId': questionId,  // match the correct response in the array
+      _id: session._id,
+      "responses.questionId": questionId, // match the correct response in the array
     },
     {
       $set: {
-        'responses.$.selectedOption': selectedOption ?? null,
+        "responses.$.selectedOption": selectedOption ?? null,
         // selectedOption can be 0 (option A), so we can't use || — use ?? (nullish coalescing)
         // ?? returns right side only if left side is null or undefined (not 0 or false)
-        'responses.$.isMarkedReview': isMarkedReview ?? false,
-        'responses.$.timeSpentSecs':  timeSpentSecs  ?? 0,
-        'responses.$.answeredAt':     selectedOption !== null && selectedOption !== undefined
-          ? new Date()
-          : null,
+        "responses.$.isMarkedReview": isMarkedReview ?? false,
+        "responses.$.timeSpentSecs": timeSpentSecs ?? 0,
+        "responses.$.answeredAt":
+          selectedOption !== null && selectedOption !== undefined
+            ? new Date()
+            : null,
       },
-    }
+    },
   );
 
   // Return remaining time so frontend can re-sync its display timer
-  const remainingSeconds = getRemainingSeconds(session.startedAt, session.exam.durationMinutes);
+  const remainingSeconds = getRemainingSeconds(
+    session.startedAt,
+    session.exam.durationMinutes,
+  );
 
-  return success(res, { remainingSeconds }, 'Answer saved');
+  return success(res, { remainingSeconds }, "Answer saved");
 };
 
 // ─────────────────────────────────────────────
@@ -226,18 +278,21 @@ const saveAnswer = async (req, res) => {
  */
 const syncTimer = async (req, res) => {
   const session = await ExamSession.findOne({
-    _id:     req.params.sessionId,
+    _id: req.params.sessionId,
     student: req.user.id,
-  }).populate('exam', 'durationMinutes');
+  }).populate("exam", "durationMinutes");
 
-  if (!session) return notFound(res, 'Session not found');
+  if (!session) return notFound(res, "Session not found");
 
-  const remainingSeconds = getRemainingSeconds(session.startedAt, session.exam.durationMinutes);
+  const remainingSeconds = getRemainingSeconds(
+    session.startedAt,
+    session.exam.durationMinutes,
+  );
 
   // If time ran out since last sync, auto-submit
-  if (remainingSeconds === 0 && session.status === 'in_progress') {
-    await finalizeSession(session._id, session.exam._id, 'auto_submitted');
-    return success(res, { remainingSeconds: 0, status: 'auto_submitted' });
+  if (remainingSeconds === 0 && session.status === "in_progress") {
+    await finalizeSession(session._id, session.exam._id, "auto_submitted");
+    return success(res, { remainingSeconds: 0, status: "auto_submitted" });
   }
 
   return success(res, { remainingSeconds, status: session.status });
@@ -254,16 +309,21 @@ const syncTimer = async (req, res) => {
  */
 const submitSession = async (req, res) => {
   const session = await ExamSession.findOne({
-    _id:     req.params.sessionId,
+    _id: req.params.sessionId,
     student: req.user.id,
   });
 
-  if (!session)                          return notFound(res, 'Session not found');
-  if (session.status !== 'in_progress') return badRequest(res, 'This exam was already submitted');
+  if (!session) return notFound(res, "Session not found");
+  if (session.status !== "in_progress")
+    return badRequest(res, "This exam was already submitted");
 
-  const scoreData = await finalizeSession(session._id, session.exam, 'submitted');
+  const scoreData = await finalizeSession(
+    session._id,
+    session.exam,
+    "submitted",
+  );
 
-  return success(res, scoreData, 'Exam submitted successfully!');
+  return success(res, scoreData, "Exam submitted successfully!");
 };
 
 // ─────────────────────────────────────────────
@@ -284,7 +344,7 @@ const submitSession = async (req, res) => {
  *   4. Mark each response as correct/incorrect
  *   5. Update session: status, submittedAt, score breakdown
  */
-const finalizeSession = async (sessionId, examId, status = 'submitted') => {
+const finalizeSession = async (sessionId, examId, status = "submitted") => {
   // Fetch session — need responses array
   const session = await ExamSession.findById(sessionId);
 
@@ -297,9 +357,9 @@ const finalizeSession = async (sessionId, examId, status = 'submitted') => {
 
   // Mark each individual response as correct or incorrect
   // This enables the "review answers" view after submission
-  const updatedResponses = session.responses.map(response => {
+  const updatedResponses = session.responses.map((response) => {
     const question = exam.questions.find(
-      q => q._id.toString() === response.questionId.toString()
+      (q) => q._id.toString() === response.questionId.toString(),
     );
 
     if (!question || response.selectedOption === null) {
@@ -315,20 +375,20 @@ const finalizeSession = async (sessionId, examId, status = 'submitted') => {
   // Update session in DB with final score
   await ExamSession.findByIdAndUpdate(sessionId, {
     status,
-    submittedAt:  new Date(),
-    score:        scoreData.score,
-    correct:      scoreData.correct,
-    wrong:        scoreData.wrong,
-    skipped:      scoreData.skipped,
-    responses:    updatedResponses,
+    submittedAt: new Date(),
+    score: scoreData.score,
+    correct: scoreData.correct,
+    wrong: scoreData.wrong,
+    skipped: scoreData.skipped,
+    responses: updatedResponses,
   });
 
   return {
-    score:      scoreData.score,
-    maxMarks:   scoreData.maxMarks,
-    correct:    scoreData.correct,
-    wrong:      scoreData.wrong,
-    skipped:    scoreData.skipped,
+    score: scoreData.score,
+    maxMarks: scoreData.maxMarks,
+    correct: scoreData.correct,
+    wrong: scoreData.wrong,
+    skipped: scoreData.skipped,
     percentage: scoreData.percentage,
     status,
   };
@@ -352,26 +412,26 @@ const finalizeSession = async (sessionId, examId, status = 'submitted') => {
 const getQuestionsInOrder = (allQuestions, questionOrder) => {
   // Build a lookup map: questionId string → question object
   // O(1) lookup instead of O(n) find for each question
-  const questionMap = new Map(
-    allQuestions.map(q => [q._id.toString(), q])
-  );
+  const questionMap = new Map(allQuestions.map((q) => [q._id.toString(), q]));
 
-  return questionOrder.map(qId => {
-    const q = questionMap.get(qId.toString());
-    if (!q) return null;
+  return questionOrder
+    .map((qId) => {
+      const q = questionMap.get(qId.toString());
+      if (!q) return null;
 
-    // Return only safe fields — NEVER send correctOption or explanation
-    return {
-      _id:        q._id,
-      text:       q.text,
-      options:    q.options,      // { a, b, c, d }
-      marks:      q.marks,
-      negativeMarks: q.negativeMarks,
-      orderIndex: q.orderIndex,
-      // correctOption: OMITTED
-      // explanation: OMITTED
-    };
-  }).filter(Boolean); // remove any nulls (shouldn't happen, but defensive)
+      // Return only safe fields — NEVER send correctOption or explanation
+      return {
+        _id: q._id,
+        text: q.text,
+        options: q.options, // { a, b, c, d }
+        marks: q.marks,
+        negativeMarks: q.negativeMarks,
+        orderIndex: q.orderIndex,
+        // correctOption: OMITTED
+        // explanation: OMITTED
+      };
+    })
+    .filter(Boolean); // remove any nulls (shouldn't happen, but defensive)
 };
 
 module.exports = { startSession, saveAnswer, syncTimer, submitSession };

@@ -10,7 +10,7 @@
  *   - apiResponse helpers → consistent response shape every time
  */
 const { validationResult } = require("express-validator");
-const User = require("../models/User.model");
+const User = require("../models/user.model");
 const {
   generateAccessToken,
   generateRefreshToken,
