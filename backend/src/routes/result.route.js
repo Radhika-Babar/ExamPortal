@@ -14,11 +14,15 @@
  *   Specific routes always before parameterized routes.
  */
 
-const { Router }   = require('express');
-const { getMyResult, getExamResults, getMyHistory } = require('../controllers/result.controller');
-const { authenticate }  = require('../middlewares/auth.middleware');
-const { requireRole }   = require('../middlewares/role.middleware');
-const { asyncHandler }  = require('../middlewares/errorHandler.middleware');
+const { Router } = require("express");
+const {
+  getMyResult,
+  getExamResults,
+  getMyHistory,
+} = require("../controllers/result.controller");
+const { authenticate } = require("../middlewares/auth.middleware");
+const { requireRole } = require("../middlewares/role.middleware");
+const { asyncHandler } = require("../middlewares/errorHandler.middleware");
 
 const router = Router();
 
@@ -27,13 +31,17 @@ router.use(authenticate);
 
 // ── Student: view their own exam history ──
 // Must be before /:sessionId or "my-history" gets captured as a session ID
-router.get('/my-history', requireRole('student'), asyncHandler(getMyHistory));
+router.get("/my-history", requireRole("student"), asyncHandler(getMyHistory));
 
 // ── Faculty/Admin: all results for one exam ──
-router.get('/exam/:examId', requireRole('faculty', 'admin'), asyncHandler(getExamResults));
+router.get(
+  "/exam/:examId",
+  requireRole("faculty", "admin"),
+  asyncHandler(getExamResults),
+);
 
 // ── Any authenticated user: specific session result ──
 // Controller handles access control (students only see own results)
-router.get('/:sessionId', asyncHandler(getMyResult));
+router.get("/:sessionId", asyncHandler(getMyResult));
 
 module.exports = router;
