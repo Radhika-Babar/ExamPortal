@@ -10,7 +10,7 @@ export default defineConfig({
     // No CORS issues, no hardcoded backend URL in every fetch call
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'https://examportal-xrtd.onrender.com',
         changeOrigin: true,
       },
     },
