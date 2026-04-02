@@ -1,0 +1,45 @@
+/* These three lines inject all of Tailwind's styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles applied globally */
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 font-sans antialiased;
+  }
+
+  /* Smooth scrolling everywhere */
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Custom component classes - reusable patterns */
+@layer components {
+  /* Standard input style used across all forms */
+  .input {
+    @apply w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+           transition-colors placeholder-gray-400;
+  }
+
+  /* Primary button */
+  .btn-primary {
+    @apply bg-primary-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium
+           hover:bg-primary-600 active:scale-95 transition-all
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Secondary/outline button */
+  .btn-secondary {
+    @apply border border-gray-300 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium
+           hover:bg-gray-50 active:scale-95 transition-all
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Standard card */
+  .card {
+    @apply bg-white rounded-xl border border-gray-200 p-6;
+  }
+}
