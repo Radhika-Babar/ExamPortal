@@ -32,7 +32,7 @@ const app = express();
 // credentials: true is needed for Authorization headers to work cross-origin.
 app.use(
   cors({
-    origin: env.frontendUri,
+    origin: env.frontendUri || "https://examportal-frontend-b0vj.onrender.com",
     credentials: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-type", "Authorization"],
