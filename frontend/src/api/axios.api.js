@@ -17,7 +17,7 @@ const api = axios.create({
   // Because vite.config.js proxies /api → localhost:5000,
   // we use /api as the base URL in development.
   // In production, set VITE_API_URL to your deployed backend URL.
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: 'https://examportal-xrtd.onrender.com/api',
   headers: {
     'Content-Type': 'application/json',
   },
