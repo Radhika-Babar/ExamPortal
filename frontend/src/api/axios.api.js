@@ -60,7 +60,7 @@ api.interceptors.response.use(
         try {
           // Call refresh endpoint directly (not through our intercepted instance
           // to avoid infinite loop)
-          const res = await axios.post('/api/auth/refresh', { refreshToken })
+          const res = await axios.post('https://examportal-xrtd.onrender.com/api/auth/refresh', { refreshToken })
           const newToken = res.data.data.accessToken
 
           localStorage.setItem('accessToken', newToken)
